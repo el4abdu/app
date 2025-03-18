@@ -1,308 +1,208 @@
 // DOM Elements
-const dropArea = document.getElementById('drop-area');
-const fileInput = document.getElementById('fileInput');
-const selectButton = document.getElementById('select-button');
-const fileInfo = document.getElementById('file-info');
-const uploadForm = document.getElementById('upload-form');
+const form = document.getElementById('upload-form');
+const fileInput = document.getElementById('file-input');
+const uploadMsg = document.getElementById('upload-msg');
+const dropZone = document.getElementById('drop-zone');
+const uploadBtn = document.getElementById('upload-btn');
+const progressBar = document.getElementById('progress-bar');
 const progressContainer = document.getElementById('progress-container');
-const progressBarFill = document.querySelector('.progress-bar-fill');
 const resultContainer = document.getElementById('result-container');
-const convertedFilename = document.getElementById('converted-filename');
-const downloadLink = document.getElementById('download-link');
-const convertAnother = document.getElementById('convert-another');
-const errorToast = document.getElementById('error-toast');
-const errorMessage = document.getElementById('error-message');
-const conversionToggle = document.getElementById('conversion-type-toggle');
-const conversionTypeInput = document.getElementById('conversion-type');
+const errorContainer = document.getElementById('error-container');
+const errorMsg = document.getElementById('error-msg');
+const downloadBtn = document.getElementById('download-btn');
+const conversionToggle = document.getElementById('conversion-toggle');
 const wav2mp3Label = document.getElementById('wav2mp3-label');
 const mp32wavLabel = document.getElementById('mp32wav-label');
-const uploadMessage = document.getElementById('upload-message');
 
-// Current conversion mode
-let currentMode = 'wav2mp3'; // Default is WAV to MP3
+// Track current conversion mode
+let currentMode = 'wav2mp3';
 
-// Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize application when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
     console.log('Audio Converter Pro initialized');
-    initializeApp();
+    checkFFmpegStatus();
+    setupEventListeners();
 });
 
-// Initialization function
-function initializeApp() {
-    // Prevent default drag behaviors
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
+// Setup all event listeners
+function setupEventListeners() {
+    // Toggle conversion mode
+    conversionToggle.addEventListener('change', toggleConversionMode);
+    
+    // File selection
+    fileInput.addEventListener('change', handleFileSelect);
+    
+    // Drag and drop events
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
     });
     
-    // Highlight drop area when item is dragged over it
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false);
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
     });
     
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false);
-    });
-    
-    // Handle dropped files
-    dropArea.addEventListener('drop', handleDrop, false);
-    
-    // Handle selected files
-    fileInput.addEventListener('change', handleFiles);
-    
-    // Open file selector when button is clicked
-    selectButton.addEventListener('click', () => {
-        fileInput.click();
-    });
-    
-    // Handle convert another button
-    convertAnother.addEventListener('click', resetForm);
-    
-    // Add click event to the entire drop area for better UX
-    dropArea.addEventListener('click', () => {
-        if (!dropArea.classList.contains('hidden')) {
-            selectButton.click();
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            fileInput.files = files;
+            handleFileSelect();
         }
     });
     
-    // Handle conversion toggle change
-    conversionToggle.addEventListener('change', toggleConversionMode);
+    // Form submission
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (fileInput.files.length > 0) {
+            uploadFile(fileInput.files[0]);
+        } else {
+            showError('Please select a file first.');
+        }
+    });
 }
 
-// Functions
-function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
+// Check if FFmpeg is available on the server
+function checkFFmpegStatus() {
+    fetch('/ffmpeg-status')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.ffmpeg_available) {
+                showError('FFmpeg is not installed or not configured properly. Audio conversion may not work correctly.');
+            }
+        })
+        .catch(error => {
+            console.error('Error checking FFmpeg status:', error);
+        });
 }
 
-function highlight() {
-    dropArea.classList.add('highlight');
-}
-
-function unhighlight() {
-    dropArea.classList.remove('highlight');
-}
-
+// Toggle between WAV to MP3 and MP3 to WAV conversion
 function toggleConversionMode() {
     if (conversionToggle.checked) {
-        // MP3 to WAV mode
         currentMode = 'mp32wav';
-        conversionTypeInput.value = 'mp32wav';
         fileInput.accept = '.mp3';
-        uploadMessage.textContent = 'Drag & drop your MP3 file here or';
+        uploadMsg.textContent = 'Drop your MP3 file here or click to browse';
         wav2mp3Label.classList.remove('active');
         mp32wavLabel.classList.add('active');
     } else {
-        // WAV to MP3 mode
         currentMode = 'wav2mp3';
-        conversionTypeInput.value = 'wav2mp3';
         fileInput.accept = '.wav';
-        uploadMessage.textContent = 'Drag & drop your WAV file here or';
+        uploadMsg.textContent = 'Drop your WAV file here or click to browse';
         mp32wavLabel.classList.remove('active');
         wav2mp3Label.classList.add('active');
     }
-    
-    // Reset form when changing modes
-    if (fileInfo.textContent) {
-        resetForm();
-    }
-    
-    console.log(`Conversion mode changed to: ${currentMode}`);
 }
 
-function handleDrop(e) {
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    handleFiles(files);
-}
-
-function handleFiles(e) {
-    const files = e.target?.files || e;
-    if (files.length) {
-        const file = files[0];
-        const fileExt = file.name.split('.').pop().toLowerCase();
+// Handle file selection
+function handleFileSelect() {
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const extension = file.name.split('.').pop().toLowerCase();
         
-        // Check if file type matches current conversion mode
+        // Validate file extension based on conversion mode
         let isValid = false;
-        let errorMsg = '';
-        
-        if (currentMode === 'wav2mp3') {
-            isValid = file.type === 'audio/wav' || fileExt === 'wav';
-            errorMsg = 'Please select a WAV file for WAV to MP3 conversion.';
-        } else {
-            isValid = file.type === 'audio/mp3' || fileExt === 'mp3';
-            errorMsg = 'Please select an MP3 file for MP3 to WAV conversion.';
+        if (currentMode === 'wav2mp3' && extension === 'wav') {
+            isValid = true;
+        } else if (currentMode === 'mp32wav' && extension === 'mp3') {
+            isValid = true;
         }
         
         if (!isValid) {
-            showError(errorMsg);
+            if (currentMode === 'wav2mp3') {
+                showError('Please select a WAV file for WAV to MP3 conversion.');
+            } else {
+                showError('Please select an MP3 file for MP3 to WAV conversion.');
+            }
+            fileInput.value = '';
             return;
         }
         
-        // Display file info
-        fileInfo.textContent = `File: ${file.name} (${formatFileSize(file.size)})`;
-        fileInfo.style.display = 'inline-block';
-        
-        // Submit the file after a short delay for better UX
-        setTimeout(() => {
-            uploadFile(file);
-        }, 500);
+        uploadMsg.textContent = `File selected: ${file.name}`;
+        uploadBtn.disabled = false;
+        hideError();
     }
 }
 
-function formatFileSize(bytes) {
-    if (bytes < 1024) return bytes + ' bytes';
-    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    else return (bytes / 1048576).toFixed(1) + ' MB';
-}
-
+// Upload file
 function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('conversion_type', currentMode);
     
-    // Show progress
-    dropArea.classList.add('hidden');
-    progressContainer.classList.remove('hidden');
-    
-    // Simulate progress (for UX purposes)
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += Math.random() * 10;
-        progressBarFill.style.width = Math.min(progress, 90) + '%';
-        if (progress >= 90) clearInterval(interval);
-    }, 300);
-    
-    // Log for debugging
-    console.log(`Uploading file: ${file.name} (${formatFileSize(file.size)})`);
-    console.log(`Conversion type: ${currentMode}`);
-    
-    // Send AJAX request
-    fetch('/convert', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.error || 'An error occurred during conversion');
-            });
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Conversion successful:', data);
-        clearInterval(interval);
-        progressBarFill.style.width = '100%';
-        
-        setTimeout(() => {
-            progressContainer.classList.add('hidden');
-            resultContainer.classList.remove('hidden');
-            
-            // Update download link and filename display
-            if (data.converted_filename) {
-                convertedFilename.textContent = data.converted_filename;
-            } else {
-                // Fallback if server doesn't return the filename
-                const outputExtension = currentMode === 'wav2mp3' ? '.mp3' : '.wav';
-                const inputExtension = currentMode === 'wav2mp3' ? '.wav' : '.mp3';
-                convertedFilename.textContent = file.name.replace(inputExtension, outputExtension);
-            }
-            
-            downloadLink.href = data.download_url;
-            
-            // Trigger confetti animation
-            triggerConfetti();
-        }, 800);
-    })
-    .catch(error => {
-        console.error('Error during conversion:', error);
-        clearInterval(interval);
-        progressContainer.classList.add('hidden');
-        dropArea.classList.remove('hidden');
-        showError(error.message);
-    });
-}
-
-function resetForm() {
-    fileInput.value = '';
-    fileInfo.textContent = '';
-    fileInfo.style.display = 'none';
+    // Reset UI
     resultContainer.classList.add('hidden');
-    dropArea.classList.remove('hidden');
-}
-
-function showError(message) {
-    errorMessage.textContent = message;
-    errorToast.classList.remove('hidden');
+    progressContainer.classList.remove('hidden');
+    uploadBtn.disabled = true;
     
-    // Add animation
-    errorToast.style.animation = 'fadeIn 0.3s ease-out forwards';
+    const xhr = new XMLHttpRequest();
     
-    setTimeout(() => {
-        errorToast.style.animation = 'fadeOut 0.3s ease-in forwards';
-        setTimeout(() => {
-            errorToast.classList.add('hidden');
-        }, 300);
-    }, 5000);
-}
-
-function triggerConfetti() {
-    // Use canvas-confetti library
-    const myConfetti = confetti.create(document.createElement('canvas'), {
-        resize: true,
-        useWorker: true
-    });
-    
-    document.body.appendChild(myConfetti.canvas);
-    myConfetti.canvas.style.position = 'fixed';
-    myConfetti.canvas.style.top = '0';
-    myConfetti.canvas.style.left = '0';
-    myConfetti.canvas.style.width = '100%';
-    myConfetti.canvas.style.height = '100%';
-    myConfetti.canvas.style.pointerEvents = 'none';
-    myConfetti.canvas.style.zIndex = '100';
-    
-    // First burst
-    myConfetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
-    });
-    
-    // Multiple smaller bursts for a more spectacular effect
-    setTimeout(() => {
-        myConfetti({
-            particleCount: 50,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0, y: 0.6 }
-        });
-    }, 250);
-    
-    setTimeout(() => {
-        myConfetti({
-            particleCount: 50,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1, y: 0.6 }
-        });
-    }, 400);
-    
-    setTimeout(() => {
-        document.body.removeChild(myConfetti.canvas);
-    }, 4000);
-}
-
-// Add these animations to the CSS
-if (!document.getElementById('toast-animations')) {
-    const style = document.createElement('style');
-    style.id = 'toast-animations';
-    style.innerHTML = `
-        @keyframes fadeOut {
-            from { opacity: 1; transform: translateY(0); }
-            to { opacity: 0; transform: translateY(20px); }
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            progressBar.style.width = percentComplete + '%';
         }
-    `;
-    document.head.appendChild(style);
+    });
+    
+    xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    showSuccess(response);
+                } else {
+                    showError(response.error || 'An error occurred during conversion.');
+                }
+            } catch (e) {
+                showError('An unexpected error occurred. Please try again.');
+            }
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                showError(response.error || `Server error: ${xhr.status}`);
+            } catch (e) {
+                showError(`Server error: ${xhr.status}`);
+            }
+        }
+        
+        progressContainer.classList.add('hidden');
+        uploadBtn.disabled = false;
+    });
+    
+    xhr.addEventListener('error', () => {
+        showError('Network error. Please check your connection and try again.');
+        progressContainer.classList.add('hidden');
+        uploadBtn.disabled = false;
+    });
+    
+    xhr.open('POST', '/convert');
+    xhr.send(formData);
+}
+
+// Show success message and download link
+function showSuccess(response) {
+    const downloadLink = document.getElementById('download-link');
+    downloadLink.href = response.download_url;
+    downloadLink.download = response.converted_filename;
+    
+    // Update the converted filename display
+    let outputFormat = currentMode === 'wav2mp3' ? 'MP3' : 'WAV';
+    document.getElementById('converted-filename').textContent = response.converted_filename;
+    
+    resultContainer.classList.remove('hidden');
+    fileInput.value = '';
+    uploadMsg.textContent = currentMode === 'wav2mp3' ? 
+        'Drop your WAV file here or click to browse' : 
+        'Drop your MP3 file here or click to browse';
+}
+
+// Show error message
+function showError(message) {
+    errorMsg.textContent = message;
+    errorContainer.classList.remove('hidden');
+}
+
+// Hide error message
+function hideError() {
+    errorContainer.classList.add('hidden');
 } 

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import os
 import logging
+import subprocess
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 import uuid
@@ -16,6 +17,16 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Check for FFmpeg at startup
+def check_ffmpeg():
+    try:
+        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        logger.info("FFmpeg is installed and working")
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        logger.warning("FFmpeg is not installed or not in PATH")
+        return False
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -63,9 +74,18 @@ def index():
     cleanup_old_files()
     return render_template('index.html')
 
+@app.route('/ffmpeg-status')
+def ffmpeg_status():
+    """Check if FFmpeg is available"""
+    status = check_ffmpeg()
+    return jsonify({"ffmpeg_available": status})
+
 @app.route('/convert', methods=['POST'])
 def convert_audio():
     """Handle the file upload and conversion"""
+    if not check_ffmpeg():
+        return jsonify({"error": "FFmpeg is not installed or not in PATH. Please contact the administrator."}), 500
+    
     if 'file' not in request.files:
         logger.warning("No file part in the request")
         return jsonify({"error": "No file part"}), 400
@@ -157,10 +177,12 @@ def internal_server_error(error):
     logger.error(f"Server error: {str(error)}")
     return jsonify({"error": "Server error. Please try again later."}), 500
 
-# Cleanup on startup
+# Check for FFmpeg and cleanup at startup
+check_ffmpeg()
 cleanup_old_files()
 
 if __name__ == '__main__':
     # In production, set debug to False and use a proper WSGI server
     debug_mode = os.environ.get('FLASK_DEBUG', 'True') == 'True'
-    app.run(debug=debug_mode, host='0.0.0.0', port=int(os.environ.get('PORT', 5000))) 
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=debug_mode, host='0.0.0.0', port=port) 

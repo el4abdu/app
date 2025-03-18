@@ -1,0 +1,5 @@
+[phases.setup]
+aptPkgs = ['ffmpeg', 'python3', 'python3-pip', 'libavcodec-extra']
+
+[start]
+cmd = "gunicorn app:app" 

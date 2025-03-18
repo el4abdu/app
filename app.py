@@ -21,12 +21,34 @@ logger = logging.getLogger(__name__)
 # Check for FFmpeg at startup
 def check_ffmpeg():
     try:
+        # First attempt: Standard method
         subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        logger.info("FFmpeg is installed and working")
+        logger.info("FFmpeg is installed and working (standard check)")
         return True
     except (subprocess.SubprocessError, FileNotFoundError):
-        logger.warning("FFmpeg is not installed or not in PATH")
-        return False
+        # Second attempt: Try with absolute path for cloud environments
+        try:
+            common_paths = [
+                '/usr/bin/ffmpeg',
+                '/usr/local/bin/ffmpeg',
+                '/opt/homebrew/bin/ffmpeg',
+                '/app/vendor/ffmpeg/bin/ffmpeg'
+            ]
+            
+            for path in common_paths:
+                if os.path.exists(path):
+                    subprocess.run([path, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                    logger.info(f"FFmpeg is installed and working at path: {path}")
+                    # Update environment to ensure pydub can find it
+                    os.environ['PATH'] = os.environ.get('PATH', '') + os.pathsep + os.path.dirname(path)
+                    return True
+            
+            # If we're here, FFmpeg is still not found
+            logger.warning("FFmpeg is not installed or not in PATH")
+            return False
+        except (subprocess.SubprocessError, FileNotFoundError):
+            logger.warning("FFmpeg is not installed or not in PATH")
+            return False
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -83,8 +105,7 @@ def ffmpeg_status():
 @app.route('/convert', methods=['POST'])
 def convert_audio():
     """Handle the file upload and conversion"""
-    if not check_ffmpeg():
-        return jsonify({"error": "FFmpeg is not installed or not in PATH. Please contact the administrator."}), 500
+    ffmpeg_available = check_ffmpeg()
     
     if 'file' not in request.files:
         logger.warning("No file part in the request")
@@ -109,25 +130,58 @@ def convert_audio():
             # Get the file extension
             file_ext = filename.rsplit('.', 1)[1].lower()
             
+            # Ensure the file type matches the conversion type
+            if (conversion_type == 'wav2mp3' and file_ext != 'wav') or (conversion_type == 'mp32wav' and file_ext != 'mp3'):
+                raise ValueError(f"File type ({file_ext}) doesn't match conversion type ({conversion_type})")
+            
+            # If FFmpeg is not available, show a more specific error
+            if not ffmpeg_available:
+                logger.error("Conversion attempted without FFmpeg available")
+                return jsonify({
+                    "error": "FFmpeg is not installed on the server. Please contact the administrator."
+                }), 500
+            
             if conversion_type == 'wav2mp3' and file_ext == 'wav':
                 # Convert WAV to MP3
-                sound = AudioSegment.from_wav(original_path)
-                converted_filename = f"{os.path.splitext(filename)[0]}.mp3"
-                converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
-                sound.export(converted_path, format="mp3", bitrate="320k")
+                try:
+                    sound = AudioSegment.from_wav(original_path)
+                    converted_filename = f"{os.path.splitext(filename)[0]}.mp3"
+                    converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
+                    sound.export(converted_path, format="mp3", bitrate="320k")
+                    logger.info(f"Conversion successful (WAV to MP3): {converted_filename} (ID: {unique_id})")
+                except Exception as e:
+                    logger.error(f"Error during WAV to MP3 conversion: {str(e)}")
+                    # Try direct FFmpeg command if pydub fails
+                    try:
+                        converted_filename = f"{os.path.splitext(filename)[0]}.mp3"
+                        converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
+                        subprocess.run(['ffmpeg', '-i', original_path, '-b:a', '320k', converted_path], 
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        logger.info(f"Fallback conversion successful (WAV to MP3): {converted_filename}")
+                    except Exception as ffmpeg_error:
+                        logger.error(f"Fallback FFmpeg conversion also failed: {str(ffmpeg_error)}")
+                        raise e  # Re-raise the original error
                 
-                logger.info(f"Conversion successful (WAV to MP3): {converted_filename} (ID: {unique_id})")
             elif conversion_type == 'mp32wav' and file_ext == 'mp3':
                 # Convert MP3 to WAV
-                sound = AudioSegment.from_mp3(original_path)
-                converted_filename = f"{os.path.splitext(filename)[0]}.wav"
-                converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
-                sound.export(converted_path, format="wav")
-                
-                logger.info(f"Conversion successful (MP3 to WAV): {converted_filename} (ID: {unique_id})")
-            else:
-                # File type doesn't match conversion type
-                raise ValueError(f"File type ({file_ext}) doesn't match conversion type ({conversion_type})")
+                try:
+                    sound = AudioSegment.from_mp3(original_path)
+                    converted_filename = f"{os.path.splitext(filename)[0]}.wav"
+                    converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
+                    sound.export(converted_path, format="wav")
+                    logger.info(f"Conversion successful (MP3 to WAV): {converted_filename} (ID: {unique_id})")
+                except Exception as e:
+                    logger.error(f"Error during MP3 to WAV conversion: {str(e)}")
+                    # Try direct FFmpeg command if pydub fails
+                    try:
+                        converted_filename = f"{os.path.splitext(filename)[0]}.wav"
+                        converted_path = os.path.join(app.config['DOWNLOAD_FOLDER'], f"{unique_id}_{converted_filename}")
+                        subprocess.run(['ffmpeg', '-i', original_path, converted_path], 
+                                      check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        logger.info(f"Fallback conversion successful (MP3 to WAV): {converted_filename}")
+                    except Exception as ffmpeg_error:
+                        logger.error(f"Fallback FFmpeg conversion also failed: {str(ffmpeg_error)}")
+                        raise e  # Re-raise the original error
             
             # Return success response with download URL
             return jsonify({

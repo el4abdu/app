@@ -1,5 +1,12 @@
 [phases.setup]
-aptPkgs = ['ffmpeg', 'python3', 'python3-pip', 'libavcodec-extra']
+nixPkgs = ["ffmpeg", "python3", "python3-pip", "libavcodec-extra"]
+cmds = [
+  "which ffmpeg",
+  "ffmpeg -version"
+]
 
 [start]
-cmd = "gunicorn app:app" 
+cmd = "gunicorn app:app"
+
+[variables]
+PATH = "/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin" 

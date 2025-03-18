@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Converter - WAV to MP3 and MP3 to WAV</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <img src="https://cdn-icons-png.flaticon.com/512/6295/6295417.png" alt="Audio Converter Logo" class="logo-img">
+                <h1><i class="fas fa-music"></i> Audio Converter Pro</h1>
+            </div>
+            <p class="tagline">Convert between WAV and MP3 formats with ease</p>
+        </header>
+
+        <main>
+            <div class="hero-section">
+                <div class="hero-content">
+                    <h2>Professional Audio Conversion</h2>
+                    <p>Transform your audio files while maintaining quality</p>
+                </div>
+                <div class="hero-image">
+                    <img src="https://cdn-icons-png.flaticon.com/512/9034/9034254.png" alt="Audio conversion illustration">
+                </div>
+            </div>
+
+            <div class="conversion-toggle-container">
+                <div class="conversion-toggle">
+                    <span id="wav2mp3-label" class="active">WAV to MP3</span>
+                    <label class="switch">
+                        <input type="checkbox" id="conversion-type-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span id="mp32wav-label">MP3 to WAV</span>
+                </div>
+            </div>
+
+            <div class="upload-container">
+                <div id="drop-area">
+                    <form id="upload-form" class="upload-form">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <p id="upload-message">Drag & drop your WAV file here or</p>
+                        <input type="file" id="fileInput" accept=".wav" hidden>
+                        <input type="hidden" id="conversion-type" name="conversion_type" value="wav2mp3">
+                        <button type="button" id="select-button">Select File</button>
+                        <div id="file-info"></div>
+                    </form>
+                </div>
+                
+                <div id="progress-container" class="hidden">
+                    <p>Converting...</p>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill"></div>
+                    </div>
+                </div>
+                
+                <div id="result-container" class="hidden">
+                    <div class="result-card">
+                        <i class="fas fa-check-circle success-icon"></i>
+                        <h3>Conversion Successful!</h3>
+                        <p id="converted-filename">Filename</p>
+                        <a id="download-link" class="download-button">
+                            <i class="fas fa-download"></i> Download File
+                        </a>
+                        <button id="convert-another" class="secondary-button">
+                            <i class="fas fa-redo"></i> Convert Another File
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="features">
+                <div class="feature-card">
+                    <i class="fas fa-bolt"></i>
+                    <h3>Fast Conversion</h3>
+                    <p>Convert audio files in seconds</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>Secure Process</h3>
+                    <p>All files are protected and your privacy is guaranteed</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-magic"></i>
+                    <h3>High Quality</h3>
+                    <p>Maintain excellent audio quality after conversion</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-desktop"></i>
+                    <h3>Works Everywhere</h3>
+                    <p>Use on any device with a modern web browser</p>
+                </div>
+            </div>
+
+            <div class="testimonials">
+                <h2>What Our Users Say</h2>
+                <div class="testimonial-container">
+                    <div class="testimonial-card">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="User avatar" class="testimonial-avatar">
+                        <p class="testimonial-text">"This converter saved me so much time. The quality is excellent and the process is super fast!"</p>
+                        <p class="testimonial-author">- James Wilson, Music Producer</p>
+                    </div>
+                    <div class="testimonial-card">
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="User avatar" class="testimonial-avatar">
+                        <p class="testimonial-text">"I've tried many online converters, but this one is by far the easiest to use. Highly recommended!"</p>
+                        <p class="testimonial-author">- Sarah Johnson, Podcast Host</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="error-toast" class="toast hidden">
+            <i class="fas fa-exclamation-circle"></i>
+            <p id="error-message">An error occurred</p>
+        </div>
+
+        <footer>
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="https://cdn-icons-png.flaticon.com/512/6295/6295417.png" alt="Audio Converter Logo" class="footer-logo-img">
+                    <h3>Audio Converter Pro</h3>
+                </div>
+                <div class="footer-links">
+                    <a href="#"><i class="fas fa-info-circle"></i> About</a>
+                    <a href="#"><i class="fas fa-question-circle"></i> FAQ</a>
+                    <a href="#"><i class="fas fa-lock"></i> Privacy Policy</a>
+                    <a href="#"><i class="fas fa-file-contract"></i> Terms of Service</a>
+                </div>
+            </div>
+            <div class="confetti-container" id="confetti-container"></div>
+            <div class="copyright">
+                <p>© 2025 Audio Converter Pro | Hosted on <a href="https://sevalla.com" target="_blank">sevalla.com</a></p>
+                <p class="made-in">Built in Morocco by <span class="author">luci.abdu</span> <img src="https://flagcdn.com/w20/ma.png" alt="Morocco flag" class="flag-icon"></p>
+            </div>
+        </footer>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.min.js"></script>
+</body>
+</html> 
